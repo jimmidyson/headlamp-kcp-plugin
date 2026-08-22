@@ -42,7 +42,7 @@ import {
   workspaceLeaf,
   workspaceOf,
 } from '../kcp/clusters';
-import { ensureDiscovery, ServedApis, servedApis, subscribe } from '../kcp/discovery';
+import { ensureDiscovery, invalidate, ServedApis, servedApis, subscribe } from '../kcp/discovery';
 import { canMint, canMintFrom, mintWorkspaceCluster } from '../kcp/mint';
 import { ApiBindingEntry, listApiBindings, listWorkspaces, WorkspaceEntry } from '../kcp/workspaces';
 import { DEFAULT_GATES, gateOpen, PluginGate } from '../sidebar/gates';
@@ -115,6 +115,10 @@ function useChildren(cluster: string | null, workspace: string | undefined, apis
   const [error, setError] = useState<Error | undefined>();
 
   useEffect(() => {
+    // Cleared first: moving to another workspace must not show the last one's
+    // children, or the last one's refusal, while this one is being read.
+    setChildren(null);
+    setError(undefined);
     if (!cluster || !workspace || !apis) {
       return;
     }
@@ -158,6 +162,7 @@ function useChildren(cluster: string | null, workspace: string | undefined, apis
 function useBindings(cluster: string | null, apis: ServedApis | undefined) {
   const [bindings, setBindings] = useState<ApiBindingEntry[] | null>(null);
   useEffect(() => {
+    setBindings(null);
     if (!cluster || !apis) {
       return;
     }
@@ -199,6 +204,16 @@ export function WorkspaceNavigator({ onNavigate, gates = DEFAULT_GATES }: Worksp
     return () => {
       cancelled = true;
     };
+  }, [cluster]);
+
+  // Discovery is cached per cluster for as long as the page is open, because
+  // what a workspace serves changes when somebody binds something - which is
+  // exactly the thing worth watching, so there is a button for it.
+  const refresh = useCallback(() => {
+    invalidate();
+    if (cluster) {
+      ensureDiscovery(cluster);
+    }
   }, [cluster]);
 
   const go = useCallback(
@@ -247,7 +262,21 @@ export function WorkspaceNavigator({ onNavigate, gates = DEFAULT_GATES }: Worksp
 
   return (
     <Box sx={{ minWidth: 520 }}>
-      <SectionBox title="Where you are">
+      <SectionBox
+        title="Where you are"
+        headerProps={{
+          actions: [
+            <Tooltip
+              key="refresh"
+              title="Ask every workspace again what it serves. Binding an APIExport changes the answer, and this is how the sidebar hears about it without a reload."
+            >
+              <IconButton size="small" onClick={refresh} aria-label="refresh">
+                <Icon icon="mdi:refresh" />
+              </IconButton>
+            </Tooltip>,
+          ],
+        }}
+      >
         <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
           {segments.map((segment, index) => {
             const path = segments.slice(0, index + 1).join(':');
