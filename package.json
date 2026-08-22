@@ -45,6 +45,6 @@
     "url": "https://github.com/jimmidyson/headlamp-kcp-plugin.git"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.3.1"
   }
 }
